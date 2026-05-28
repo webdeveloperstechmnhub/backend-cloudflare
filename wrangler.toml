@@ -1,4 +1,4 @@
-name = "techmnhub-backendflare"
+name = "backend-cloudflare"
 main = "src/worker.mjs"
 compatibility_date = "2026-05-28"
 compatibility_flags = ["nodejs_compat"]
