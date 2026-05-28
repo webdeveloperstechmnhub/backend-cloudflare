@@ -16,19 +16,19 @@ import authMiddleware from "../middleware/authMiddleware.js";
 import instituteAuthMiddleware from "../middleware/instituteAuthMiddleware.js";
 import studentAuthMiddleware from "../middleware/studentAuthMiddleware.js";
 import telemetryController from "../controllers/telemetryController.js";
-import mongoose from "mongoose";
+import { assertDb } from "./db/runtime.js";
 
 export const registerApiRoutes = (app) => {
   app.get("/api/health", (c) => {
-    const mongoReadyState = mongoose.connection.readyState;
+    const db = assertDb();
 
     return c.json({
       ok: true,
-      status: mongoReadyState === 1 ? "healthy" : "degraded",
+      status: "healthy",
       service: "backendflare",
-      mongo: {
-        connected: mongoReadyState === 1,
-        readyState: mongoReadyState,
+      database: {
+        connected: Boolean(db),
+        type: "d1",
       },
       timestamp: new Date().toISOString(),
     });

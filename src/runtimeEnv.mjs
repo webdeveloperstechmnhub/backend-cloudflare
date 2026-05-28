@@ -12,4 +12,6 @@ export const injectEnvToProcess = (env) => {
       globalThis.process.env[key] = String(value);
     }
   }
+
+  globalThis.__D1_DB = env && env.DB ? env.DB : globalThis.__D1_DB || null;
 };

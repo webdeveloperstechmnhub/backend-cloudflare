@@ -1,224 +1,120 @@
-const { MongoClient } = require('mongodb');
+const { assertDb } = require('../src/db/runtime');
+const definitions = require('../src/db/schema/definitions');
 
-function inferDbName(uri, fallback = '') {
-  try {
-    const parsed = new URL(uri);
-    const pathname = parsed.pathname.replace(/^\//, '').trim();
-    return pathname || fallback;
-  } catch {
-    return fallback;
-  }
+const MODEL_NAMES = Object.keys(definitions);
+const TABLE_TO_MODEL = new Map(MODEL_NAMES.map((modelName) => [definitions[modelName].table, modelName]));
+
+function inferDbName(_uri, fallback = 'techmnhub-db') {
+  return fallback;
 }
 
-async function cloneCollection(sourceDb, destinationDb, collectionName) {
-  const sourceCollection = sourceDb.collection(collectionName);
-  const destinationCollection = destinationDb.collection(collectionName);
+function quoteIdentifier(identifier) {
+  return `"${String(identifier).replace(/"/g, '""')}"`;
+}
 
-  let processed = 0;
-  let batch = [];
+function resolveCollectionName(name) {
+  const rawName = String(name || '').trim();
+  if (!rawName) {
+    return '';
+  }
 
-  const flush = async () => {
-    if (batch.length === 0) {
-      return;
-    }
+  if (definitions[rawName]) {
+    return definitions[rawName].table;
+  }
 
-    await destinationCollection.bulkWrite(batch, { ordered: false });
-    batch = [];
+  return rawName;
+}
+
+function resolveDisplayName(name) {
+  const rawName = String(name || '').trim();
+  if (!rawName) {
+    return '';
+  }
+
+  return TABLE_TO_MODEL.get(rawName) || rawName;
+}
+
+async function getAvailableTables(db) {
+  const rows = await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();
+  return (rows.results || []).map((row) => row.name).filter(Boolean);
+}
+
+async function exportTable(db, tableName) {
+  const totalRow = await db.prepare(`SELECT COUNT(*) AS count FROM ${quoteIdentifier(tableName)}`).first();
+  const rows = await db.prepare(
+    `SELECT id, data, created_at AS createdAt, updated_at AS updatedAt FROM ${quoteIdentifier(tableName)} ORDER BY created_at DESC`,
+  ).all();
+
+  const documents = (rows.results || []).map((row) => {
+    const payload = row.data ? JSON.parse(row.data) : {};
+    return {
+      id: row.id,
+      ...payload,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  });
+
+  return {
+    name: resolveDisplayName(tableName),
+    tableName,
+    documents: Number(totalRow?.count || 0),
+    records: documents,
   };
-
-  const cursor = sourceCollection.find({});
-
-  for await (const doc of cursor) {
-    batch.push({
-      replaceOne: {
-        filter: { _id: doc._id },
-        replacement: doc,
-        upsert: true,
-      },
-    });
-
-    processed += 1;
-
-    if (batch.length >= 250) {
-      await flush();
-    }
-  }
-
-  await flush();
-
-  return { documents: processed };
 }
 
-async function cloneDatabase({ sourceUri, sourceDbName, destinationDb }) {
-  const resolvedSourceDbName = String(sourceDbName || inferDbName(sourceUri)).trim();
+async function exportDatabaseData({ selectedCollections } = {}) {
+  const db = assertDb();
+  const availableTables = await getAvailableTables(db);
+  const requestedCollections = Array.isArray(selectedCollections)
+    ? selectedCollections.map((name) => String(name || '').trim()).filter(Boolean)
+    : [];
 
-  if (!sourceUri) {
-    throw new Error('Source MongoDB URI is required.');
+  const collectionNames = requestedCollections.length > 0
+    ? requestedCollections
+        .map(resolveCollectionName)
+        .filter((tableName) => availableTables.includes(tableName))
+    : availableTables;
+
+  if (requestedCollections.length > 0 && collectionNames.length === 0) {
+    throw new Error('None of the requested collections were found in the D1 database.');
   }
 
-  if (!resolvedSourceDbName) {
-    throw new Error('Source database name is required when the URI does not include one.');
+  const summaries = [];
+  const data = {};
+
+  for (const tableName of collectionNames) {
+    const snapshot = await exportTable(db, tableName);
+    summaries.push({ collectionName: snapshot.name, documents: snapshot.documents });
+    data[snapshot.name] = snapshot.records;
   }
 
-  if (!destinationDb || !destinationDb.databaseName) {
-    throw new Error('Destination database is not available.');
-  }
-
-  const sourceClient = new MongoClient(sourceUri);
-
-  try {
-    await sourceClient.connect();
-
-    const sourceDb = sourceClient.db(resolvedSourceDbName);
-    const collections = await sourceDb.listCollections({}, { nameOnly: true }).toArray();
-    const collectionNames = collections
-      .map((collection) => collection.name)
-      .filter((name) => !name.startsWith('system.'));
-
-    const summaries = [];
-
-    for (const collectionName of collectionNames) {
-      const summary = await cloneCollection(sourceDb, destinationDb, collectionName);
-      summaries.push({ collectionName, ...summary });
-    }
-
-    return {
-      sourceDbName: resolvedSourceDbName,
-      destinationDbName: destinationDb.databaseName,
-      collections: summaries,
-    };
-  } finally {
-    await sourceClient.close().catch(() => {});
-  }
+  return {
+    sourceDbName: 'techmnhub-db',
+    exportedAt: new Date().toISOString(),
+    collections: summaries,
+    data,
+  };
 }
 
-async function cloneDatabaseBetweenUris({
-  sourceUri,
-  sourceDbName,
-  destinationUri,
-  destinationDbName,
-  selectedCollections,
-}) {
-  const resolvedSourceDbName = String(sourceDbName || inferDbName(sourceUri)).trim();
-  const resolvedDestinationDbName = String(destinationDbName || inferDbName(destinationUri)).trim();
-
-  if (!sourceUri || !destinationUri) {
-    throw new Error('Both source and destination MongoDB URIs are required.');
-  }
-
-  if (!resolvedSourceDbName) {
-    throw new Error('Source database name is required when the source URI does not include one.');
-  }
-
-  if (!resolvedDestinationDbName) {
-    throw new Error('Destination database name is required when the destination URI does not include one.');
-  }
-
-  if (sourceUri === destinationUri && resolvedSourceDbName === resolvedDestinationDbName) {
-    throw new Error('Source and destination point to the same database.');
-  }
-
-  const sourceClient = new MongoClient(sourceUri);
-  const destinationClient = new MongoClient(destinationUri);
-
-  try {
-    await sourceClient.connect();
-    await destinationClient.connect();
-
-    const sourceDb = sourceClient.db(resolvedSourceDbName);
-    const destinationDb = destinationClient.db(resolvedDestinationDbName);
-
-    const collections = await sourceDb.listCollections({}, { nameOnly: true }).toArray();
-    const availableCollectionNames = collections
-      .map((collection) => collection.name)
-      .filter((name) => !name.startsWith('system.'));
-
-    const requestedCollections = Array.isArray(selectedCollections)
-      ? selectedCollections.map((name) => String(name || '').trim()).filter(Boolean)
-      : [];
-
-    const collectionNames = requestedCollections.length > 0
-      ? requestedCollections.filter((name) => availableCollectionNames.includes(name))
-      : availableCollectionNames;
-
-    if (requestedCollections.length > 0 && collectionNames.length === 0) {
-      throw new Error('None of the requested collections were found in the source database.');
-    }
-
-    const summaries = [];
-
-    for (const collectionName of collectionNames) {
-      const summary = await cloneCollection(sourceDb, destinationDb, collectionName);
-      summaries.push({ collectionName, ...summary });
-    }
-
-    return {
-      sourceDbName: resolvedSourceDbName,
-      destinationDbName: resolvedDestinationDbName,
-      collections: summaries,
-    };
-  } finally {
-    await sourceClient.close().catch(() => {});
-    await destinationClient.close().catch(() => {});
-  }
+async function cloneDatabase(options = {}) {
+  const exportResult = await exportDatabaseData(options);
+  return {
+    sourceDbName: exportResult.sourceDbName,
+    destinationDbName: 'techmnhub-db',
+    collections: exportResult.collections,
+    data: exportResult.data,
+  };
 }
 
-async function exportDatabaseData({
-  sourceUri,
-  sourceDbName,
-  selectedCollections,
-}) {
-  const resolvedSourceDbName = String(sourceDbName || inferDbName(sourceUri)).trim();
-
-  if (!sourceUri) {
-    throw new Error('Source MongoDB URI is required.');
-  }
-
-  if (!resolvedSourceDbName) {
-    throw new Error('Source database name is required when the source URI does not include one.');
-  }
-
-  const sourceClient = new MongoClient(sourceUri);
-
-  try {
-    await sourceClient.connect();
-
-    const sourceDb = sourceClient.db(resolvedSourceDbName);
-    const collections = await sourceDb.listCollections({}, { nameOnly: true }).toArray();
-    const availableCollectionNames = collections
-      .map((collection) => collection.name)
-      .filter((name) => !name.startsWith('system.'));
-
-    const requestedCollections = Array.isArray(selectedCollections)
-      ? selectedCollections.map((name) => String(name || '').trim()).filter(Boolean)
-      : [];
-
-    const collectionNames = requestedCollections.length > 0
-      ? requestedCollections.filter((name) => availableCollectionNames.includes(name))
-      : availableCollectionNames;
-
-    if (requestedCollections.length > 0 && collectionNames.length === 0) {
-      throw new Error('None of the requested collections were found in the source database.');
-    }
-
-    const data = {};
-    const summaries = [];
-
-    for (const collectionName of collectionNames) {
-      const documents = await sourceDb.collection(collectionName).find({}).toArray();
-      data[collectionName] = documents;
-      summaries.push({ collectionName, documents: documents.length });
-    }
-
-    return {
-      sourceDbName: resolvedSourceDbName,
-      exportedAt: new Date().toISOString(),
-      collections: summaries,
-      data,
-    };
-  } finally {
-    await sourceClient.close().catch(() => {});
-  }
+async function cloneDatabaseBetweenUris(options = {}) {
+  const exportResult = await exportDatabaseData(options);
+  return {
+    sourceDbName: exportResult.sourceDbName,
+    destinationDbName: 'techmnhub-db',
+    collections: exportResult.collections,
+    data: exportResult.data,
+  };
 }
 
 module.exports = {

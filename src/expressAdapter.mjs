@@ -1,7 +1,5 @@
 import { buildCorsHeaders } from "./cors.mjs";
 
-const DEFAULT_HANDLER_TIMEOUT_MS = 450;
-
 const toPlainHeaders = (request) => {
   const headers = {};
   request.headers.forEach((value, key) => {
@@ -192,22 +190,6 @@ const runStack = async (stack, req, res) => {
   await dispatch(0);
 };
 
-const withTimeout = async (promise, timeoutMs, onTimeout) => {
-  let timer;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(onTimeout()), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timer) {
-      clearTimeout(timer);
-    }
-  }
-};
-
 export const adaptExpressHandlers = (...handlers) => {
   const stack = handlers.flat().filter(Boolean);
 
@@ -218,21 +200,13 @@ export const adaptExpressHandlers = (...handlers) => {
     res.__state = state;
 
     try {
-      await withTimeout(
-        runStack(stack, req, res),
-        DEFAULT_HANDLER_TIMEOUT_MS,
-        () => new Error("Handler timed out"),
-      );
+      await runStack(stack, req, res);
     } catch (error) {
       console.error("Route execution error:", error);
       if (!state.sent) {
-        state.statusCode = error && error.message === "Handler timed out" ? 504 : 500;
+        state.statusCode = 500;
         state.headers.set("content-type", "application/json; charset=utf-8");
-        state.body = JSON.stringify({
-          msg: error && error.message === "Handler timed out"
-            ? "Request timed out while processing database work in Cloudflare Workers"
-            : "Server error",
-        });
+        state.body = JSON.stringify({ msg: "Server error" });
         state.sent = true;
       }
     }

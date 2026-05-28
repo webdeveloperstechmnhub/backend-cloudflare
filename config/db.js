@@ -1,13 +1,8 @@
-const mongoose = require("mongoose");
+const { assertDb } = require("../src/db/runtime");
 
 const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("MongoDB Connected");
-  } catch (err) {
-    console.error(err);
-    process.exit(1);
-  }
+  assertDb();
+  console.log("D1 binding available");
 };
 
 module.exports = connectDB;

@@ -1,0 +1,26 @@
+const definitions = {
+  User: { table: "users", relations: { eventId: { model: "Event", foreignKey: "id" } } },
+  Event: { table: "events", relations: {} },
+  Admin: { table: "admins", relations: {} },
+  AccountUser: { table: "account_users", relations: {} },
+  Institute: { table: "institutes", relations: { user_id: { model: "AccountUser", foreignKey: "id" } } },
+  SessionBooking: { table: "session_bookings", relations: {} },
+  StudentSignup: { table: "student_signups", relations: {} },
+  SessionRecord: { table: "session_records", relations: {} },
+  RevokedToken: { table: "revoked_tokens", relations: {} },
+  AuthAuditLog: { table: "auth_audit_logs", relations: {} },
+  TelemetryFilter: { table: "telemetry_filters", relations: {} },
+  ContactMessage: { table: "contact_messages", relations: {} },
+  Employee: { table: "employees", relations: {} },
+  Attendance: { table: "attendance", relations: { userId: { model: "User", foreignKey: "id" }, eventId: { model: "Event", foreignKey: "id" } } },
+  InstituteActivity: { table: "institute_activities", relations: { instituteId: { model: "Institute", foreignKey: "id" }, createdBy: { model: "AccountUser", foreignKey: "id" } } },
+  AmbassadorSchool: { table: "ambassador_schools", relations: {} },
+  AmbassadorApplication: { table: "ambassador_applications", relations: { schoolId: { model: "AmbassadorSchool", foreignKey: "id" } } },
+  Ambassador: { table: "ambassadors", relations: { applicationId: { model: "AmbassadorApplication", foreignKey: "id" }, schoolId: { model: "AmbassadorSchool", foreignKey: "id" } } },
+  AmbassadorActivity: { table: "ambassador_activities", relations: { ambassadorId: { model: "Ambassador", foreignKey: "id" } } },
+  AmbassadorReferral: { table: "ambassador_referrals", relations: { ambassadorId: { model: "Ambassador", foreignKey: "id" } } },
+  AmbassadorLevel: { table: "ambassador_levels", relations: {} },
+  AmbassadorReward: { table: "ambassador_rewards", relations: { levelNumber: { model: "AmbassadorLevel", foreignKey: "levelNumber" } } },
+};
+
+module.exports = definitions;

@@ -3,13 +3,18 @@ main = "src/worker.mjs"
 compatibility_date = "2026-05-28"
 compatibility_flags = ["nodejs_compat"]
 
+[[d1_databases]]
+binding = "DB"
+database_name = "techmnhub-db"
+database_id = "REPLACE_WITH_REAL_ID"
+migrations_dir = "migrations"
+
 [observability]
 enabled = true
 
 [vars]
 NODE_ENV = "production"
 PORT = "5000"
-MONGO_URI = "mongodb+srv://webdevs:WTTS%402026@cluster0.woktzgp.mongodb.net/?appName=Cluster0"
 JWT_SECRET = "xTN5aqUwWGzhDJs"
 ADMIN_EMAIL = "webdevelopers.techmnhub@gmail.com"
 ADMIN_PASS = "WTTS@2026"
