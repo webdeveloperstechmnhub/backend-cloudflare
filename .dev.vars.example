@@ -1,0 +1,20 @@
+PORT=5000
+MONGO_URI=mongodb+srv://webdevs:WTTS%402026@cluster0.woktzgp.mongodb.net/?appName=Cluster0
+JWT_SECRET=xTN5aqUwWGzhDJs
+ADMIN_EMAIL=webdevelopers.techmnhub@gmail.com
+ADMIN_PASS=WTTS@2026
+RAZORPAY_KEY=rzp_live_SGU4n30KnwrEcL
+RAZORPAY_SECRET=g767LOjdJtmf90wanvKZxmHR
+RESEND_API_KEY=re_K2QuTTaV_Lz2yXToAze3DRpM3GL6GcDNf
+RESEND_FROM=TechMNHub <noreply@techmnhub.com>
+SESSION_MANAGER_SECRET=7xTN5aqUwWGzhDJs
+SESSION_MANAGER_URL=http://localhost:5002
+SESSION_MANAGER_API_URL=
+INTERNAL_API_SECRET=
+SESSION_TTL_SECONDS=604800
+SITE_URL=https://www.techmnhub.com
+BREVO_EMAIL=a24b39001@smtp-brevo.com
+BREVO_PASSWORD=bskLwUYRI9mVuNh
+EMAIL=techmnhub1.team@gmail.com
+EMAIL_PASS=eakc fvna yzpy amkp
+EMAIL_PROVIDER=gmail
