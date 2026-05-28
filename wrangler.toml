@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "techmnhub-db"
-database_id = "REPLACE_WITH_REAL_ID"
+database_id = "22cb2902-5797-46bd-8106-b7e19bfd6bcf"
 migrations_dir = "migrations"
 
 [observability]
